@@ -37,6 +37,7 @@ class ChatResponse(BaseModel):
     citations: list[Citation]
     arbiter_flags: list[ArbiterFlag]
     new_facts: list[UUID]
+    truth_score: int  # 0-100, computed deterministically by arbiter
 
 
 class MessageResponse(BaseModel):
@@ -47,6 +48,7 @@ class MessageResponse(BaseModel):
     content: str
     citations: list[Citation]
     arbiter_flags: list[ArbiterFlag]
+    truth_score: int | None = None  # null for messages persisted before this column
     created_at: str
 
     model_config = {"from_attributes": True}

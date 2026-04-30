@@ -132,6 +132,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     arbiter_flags: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    truth_score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships

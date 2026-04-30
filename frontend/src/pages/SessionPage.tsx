@@ -5,6 +5,7 @@ import { useSession, useEndSession } from '../hooks/useSession'
 import { useMessages, useSendMessage } from '../hooks/useChat'
 import { useLedger } from '../hooks/useLedger'
 import { useGenerateQuestions, useExportQuestions } from '../hooks/useQuestions'
+import TruthOMeter from '../components/TruthOMeter'
 import type { Message, ArbiterFlag, Citation, FactEntry, GeneratedQuestion } from '../types'
 
 export default function SessionPage() {
@@ -86,6 +87,13 @@ export default function SessionPage() {
 
   const isCoach = session.agent_mode === 'plaintiff_coach'
 
+  // Truth-O-Meter score is sourced from the most recent agent-role message.
+  // Arbiter analysis runs against the witness response but its outputs
+  // (arbiter_flags + truth_score) are persisted on the agent message that
+  // follows it (see app/services/chat.py:99-105). Null = no score yet.
+  const latestAgentScore =
+    messages?.filter((m) => m.role === 'agent').slice(-1)[0]?.truth_score ?? null
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
       {/* Header */}
@@ -145,6 +153,11 @@ export default function SessionPage() {
       <main className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Chat Panel */}
         <div className="flex-1 flex flex-col">
+          {/* Truth-O-Meter — aggregated arbiter confidence for the latest agent message. */}
+          <div className="px-6 pt-4">
+            <TruthOMeter score={latestAgentScore} className="mb-4" />
+          </div>
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 chat-scroll">
             {/* Welcome message */}

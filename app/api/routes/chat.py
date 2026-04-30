@@ -75,6 +75,7 @@ async def get_messages(
             content=msg.content,
             citations=msg.citations,
             arbiter_flags=msg.arbiter_flags,
+            truth_score=msg.truth_score,
             created_at=msg.created_at.isoformat(),
         )
         for msg in messages

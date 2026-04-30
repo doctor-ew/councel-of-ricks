@@ -19,6 +19,7 @@ export interface Message {
   content: string
   citations: Citation[]
   arbiter_flags: ArbiterFlag[]
+  truth_score: number | null
   created_at: string
 }
 
@@ -89,6 +90,7 @@ export interface ChatResponse {
   citations: Citation[]
   arbiter_flags: ArbiterFlag[]
   new_facts: string[]
+  truth_score: number
 }
 
 export interface SessionSummary {

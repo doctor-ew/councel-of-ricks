@@ -25,10 +25,44 @@ class ArbiterAnalysis:
         extracted_facts: list[dict],
         flags: list[ArbiterFlag],
         suggested_followups: list[str],
+        *,
+        truth_score: int = 100,
     ):
         self.extracted_facts = extracted_facts
         self.flags = flags
         self.suggested_followups = suggested_followups
+        self.truth_score = truth_score
+
+
+def _compute_truth_score(facts: list[dict], flags: list[ArbiterFlag]) -> int:
+    """
+    Deterministically compute a 0-100 truth score from arbiter outputs.
+
+    Penalty table (locked for v1; may be tuned in a follow-up ticket):
+      - contradiction flag: -15
+      - unsupported flag:   -8
+      - fact confidence dont_recall: -5
+      - fact confidence uncertain:   -3
+      - fact confidence estimate:    -3
+      - fact confidence certain:     0
+
+    `vague` flags are intentionally not penalized (vagueness is captured
+    via the `uncertain` / `estimate` fact confidence). The `risk` flag is
+    not emitted by the current arbiter and is not penalized.
+    """
+    score = 100
+    for f in flags:
+        if f.flag_type == "contradiction":
+            score -= 15
+        elif f.flag_type == "unsupported":
+            score -= 8
+    for fact in facts:
+        c = fact.get("confidence")
+        if c == "dont_recall":
+            score -= 5
+        elif c in ("uncertain", "estimate"):
+            score -= 3
+    return max(0, min(100, score))
 
 
 class ArbiterEngine:
@@ -72,10 +106,14 @@ class ArbiterEngine:
         # Step 6: Suggest follow-ups
         suggested_followups = self._suggest_followups(flags, supported_facts)
 
+        # Step 7: Compute deterministic truth score from facts + flags
+        truth_score = _compute_truth_score(supported_facts, flags)
+
         return ArbiterAnalysis(
             extracted_facts=supported_facts,
             flags=flags,
             suggested_followups=suggested_followups,
+            truth_score=truth_score,
         )
 
     async def _extract_facts(

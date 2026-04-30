@@ -102,6 +102,7 @@ class ChatService:
             content=agent_response.message,
             citations=[c.model_dump(mode="json") for c in agent_response.citations],
             arbiter_flags=[f.model_dump(mode="json") for f in arbiter_result.flags],
+            truth_score=arbiter_result.truth_score,
         )
         self.db.add(agent_msg)
 
@@ -113,6 +114,7 @@ class ChatService:
             citations=agent_response.citations,
             arbiter_flags=arbiter_result.flags,
             new_facts=new_fact_ids,
+            truth_score=arbiter_result.truth_score,
         )
 
     async def _get_conversation_context(self, session_id: UUID) -> list[dict]:
