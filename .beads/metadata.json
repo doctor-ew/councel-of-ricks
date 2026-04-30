@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "Councel_of_Ricks",
+  "project_id": "15e1d041-a1f1-472e-af3d-3330175495cc"
+}
