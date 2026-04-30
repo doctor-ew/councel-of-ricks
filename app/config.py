@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     # Document Storage
-    documents_path: str = ""
+    documents_path: str = "./transcripts"
 
     # Optional: OCR
     tesseract_path: str | None = None

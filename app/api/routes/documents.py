@@ -21,7 +21,7 @@ async def ingest_documents(
     db: AsyncSession = Depends(get_db),
 ) -> IngestResponse:
     """
-    Ingest PDF documents from a directory.
+    Ingest transcript files (.txt) from a directory.
 
     If directory_path is not provided, uses DOCUMENTS_PATH from environment.
     """

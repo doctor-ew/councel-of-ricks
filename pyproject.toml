@@ -17,7 +17,6 @@ dependencies = [
     "llama-index-embeddings-openai>=0.3.0",
     "llama-index-llms-openai>=0.3.0",
     "openai>=1.59.0",
-    "pymupdf>=1.25.0",
     "pytesseract>=0.3.13",
     "python-multipart>=0.0.20",
     "httpx>=0.28.0",
