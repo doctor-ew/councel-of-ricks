@@ -29,9 +29,12 @@ class Settings(BaseSettings):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 
-    # OpenAI
-    openai_api_key: str
-    openai_model: str = "gpt-4o"
+    # Anthropic (LLM calls)
+    anthropic_api_key: str
+    anthropic_model: str = "claude-sonnet-4-6"
+
+    # OpenAI (embeddings only — Claude has no embedding API)
+    openai_api_key: str = ""
     openai_embedding_model: str = "text-embedding-3-small"
 
     # Application

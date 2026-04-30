@@ -4,7 +4,7 @@ import json
 import logging
 from uuid import UUID
 
-from openai import AsyncOpenAI
+import anthropic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,8 +43,8 @@ class ArbiterEngine:
     def __init__(self, db: AsyncSession, retrieval: RetrievalService):
         self.db = db
         self.retrieval = retrieval
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.anthropic_model
 
     async def analyze_response(
         self,
@@ -108,7 +108,7 @@ Examples of confidence levels:
 
 Return ONLY the JSON array, no other text. If no facts, return []."""
 
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -116,7 +116,7 @@ Return ONLY the JSON array, no other text. If no facts, return []."""
         )
 
         try:
-            content = response.choices[0].message.content or "[]"
+            content = response.content[0].text
             # Clean up potential markdown formatting
             content = content.strip()
             if content.startswith("```"):
@@ -124,7 +124,7 @@ Return ONLY the JSON array, no other text. If no facts, return []."""
                 content = content.rsplit("```", 1)[0]
             return json.loads(content)
         except json.JSONDecodeError:
-            logger.error(f"Failed to parse facts: {response.choices[0].message.content}")
+            logger.error(f"Failed to parse facts: {response.content[0].text}")
             return []
 
     async def _get_existing_facts(self, session_id: UUID) -> list[dict]:
@@ -167,7 +167,7 @@ Return a JSON array of contradictions found. Each element should have:
 
 Only flag clear contradictions, not minor variations. Return [] if no contradictions."""
 
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -175,7 +175,7 @@ Only flag clear contradictions, not minor variations. Return [] if no contradict
         )
 
         try:
-            content = response.choices[0].message.content or "[]"
+            content = response.content[0].text
             content = content.strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[1]

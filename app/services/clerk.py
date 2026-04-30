@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from openai import AsyncOpenAI
+import anthropic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,8 +44,8 @@ class ClerkService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.retrieval = RetrievalService(db)
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.anthropic_model
 
     async def ask(
         self,
@@ -82,7 +82,7 @@ class ClerkService:
         sources.extend(fact_sources)
 
         # 4. Build LLM prompt with all context
-        messages = [{"role": "system", "content": CLERK_SYSTEM_PROMPT}]
+        messages = []
 
         # Add conversation history for continuity
         if conversation_history:
@@ -118,14 +118,15 @@ Provide a clear, citation-backed answer. Reference specific documents and page n
         messages.append({"role": "user", "content": user_prompt})
 
         # 5. Call LLM
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.model,
+            system=CLERK_SYSTEM_PROMPT,
             messages=messages,
             temperature=0.3,  # Lower temp for factual accuracy
             max_tokens=1500,
         )
 
-        answer = response.choices[0].message.content or "I was unable to generate a response."
+        answer = response.content[0].text
 
         return ClerkResponse(
             answer=answer,
@@ -168,14 +169,13 @@ Which of these established facts are relevant? Return ONLY the index numbers (co
 FACTS:
 {facts_text}"""
 
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.model,
             messages=[{"role": "user", "content": relevance_prompt}],
-            temperature=0,
             max_tokens=200,
         )
 
-        relevant_text = response.choices[0].message.content or "NONE"
+        relevant_text = response.content[0].text
 
         if "NONE" in relevant_text.upper():
             return "", []

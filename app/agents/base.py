@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from openai import AsyncOpenAI
+import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -29,8 +29,8 @@ class BaseDepositionAgent(ABC):
     def __init__(self, db: AsyncSession, retrieval: RetrievalService):
         self.db = db
         self.retrieval = retrieval
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.anthropic_model
 
     @property
     @abstractmethod
@@ -53,7 +53,6 @@ class BaseDepositionAgent(ABC):
         profile_context: ProfileContext | None = None,
     ) -> AgentResponse:
         """Generate a response based on context and arbiter analysis."""
-        # Get relevant documents for context
         if conversation_context:
             last_witness_msg = next(
                 (m["content"] for m in reversed(conversation_context) if m["role"] == "witness"),
@@ -66,29 +65,25 @@ class BaseDepositionAgent(ABC):
             doc_context = ""
             citations = []
 
-        # Build the prompt
-        messages = [{"role": "system", "content": self._build_system_message(arbiter_flags, profile_context)}]
+        system_msg = self._build_system_message(arbiter_flags, profile_context)
 
-        # Add conversation history
+        messages = []
         for msg in conversation_context:
             role = "user" if msg["role"] == "witness" else "assistant"
             messages.append({"role": role, "content": msg["content"]})
 
-        # Add context and instructions for this turn
-        context_msg = self._build_context_message(
-            doc_context, arbiter_flags, suggested_followups
-        )
+        context_msg = self._build_context_message(doc_context, arbiter_flags, suggested_followups)
         messages.append({"role": "user", "content": context_msg})
 
-        # Call LLM
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.model,
+            system=system_msg,
             messages=messages,
             temperature=0.7,
-            max_tokens=1000,
+            max_tokens=1024,
         )
 
-        agent_message = response.choices[0].message.content or ""
+        agent_message = response.content[0].text
 
         return AgentResponse(message=agent_message, citations=citations)
 
@@ -98,7 +93,6 @@ class BaseDepositionAgent(ABC):
         """Build the full system message including base prompt, profile, and flags."""
         base = self.system_prompt
 
-        # Add profile context if available
         if profile_context:
             base += profile_context.to_prompt()
 

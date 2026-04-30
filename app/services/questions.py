@@ -4,7 +4,7 @@ import json
 import logging
 from uuid import UUID
 
-from openai import AsyncOpenAI
+import anthropic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,8 @@ class QuestionGenerator:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.anthropic_model
         self.retrieval = RetrievalService(db)
 
     async def generate_questions(
@@ -64,20 +65,17 @@ class QuestionGenerator:
             request=request,
         )
 
-        # Call OpenAI to generate questions
-        response = await self.client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": self._get_system_prompt(request.difficulty)},
-                {"role": "user", "content": prompt},
-            ],
+        # Call Anthropic to generate questions
+        response = await self.client.messages.create(
+            model=self.model,
+            system=self._get_system_prompt(request.difficulty),
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=3000,
-            response_format={"type": "json_object"},
         )
 
         # Parse response
-        result = json.loads(response.choices[0].message.content or "{}")
+        result = json.loads(response.content[0].text)
         questions = result.get("questions", [])
 
         # Convert to GeneratedQuestion objects
