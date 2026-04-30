@@ -1,0 +1,12 @@
+[build]
+# Build the React frontend first, then Railway's Nixpacks handles Python deps.
+builder = "nixpacks"
+buildCommand = "cd frontend && npm install -g bun@latest && bun install && bun run build && cd .."
+
+[deploy]
+# $PORT is injected by Railway. Use 2 workers for prod.
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
