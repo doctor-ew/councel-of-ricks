@@ -178,14 +178,17 @@ Return ONLY the JSON object, no other text. Example:
         )
 
         try:
+            if not response.content:
+                logger.error("Empty content array from API in _extract_facts")
+                return [], False
             content = response.content[0].text.strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[1]
                 content = content.rsplit("```", 1)[0]
             parsed = json.loads(content)
             return parsed.get("facts", []), bool(parsed.get("inappropriate", False))
-        except (json.JSONDecodeError, AttributeError):
-            logger.error(f"Failed to parse facts: {response.content[0].text}")
+        except (json.JSONDecodeError, AttributeError, IndexError):
+            logger.error("Failed to parse facts from API response")
             return [], False
 
     async def _get_existing_facts(self, session_id: UUID) -> list[dict]:
@@ -246,6 +249,9 @@ Only flag clear contradictions, not minor variations. Return [] if no contradict
         )
 
         try:
+            if not response.content:
+                logger.error("Empty content array from API in _check_contradictions")
+                return []
             content = response.content[0].text
             content = content.strip()
             if content.startswith("```"):
