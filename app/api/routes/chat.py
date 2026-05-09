@@ -37,12 +37,15 @@ async def chat(
 
     # Process the chat
     service = ChatService(db)
-    response = await service.process_message(
-        session_id=request.session_id,
-        witness_message=request.message,
-        agent_mode=session.agent_mode,
-        profile_id=session.profile_id,
-    )
+    try:
+        response = await service.process_message(
+            session_id=request.session_id,
+            witness_message=request.message,
+            agent_mode=session.agent_mode,
+            profile_id=session.profile_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Processing error: {exc}") from exc
 
     return response
 

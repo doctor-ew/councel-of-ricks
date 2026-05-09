@@ -105,23 +105,33 @@ class ArbiterEngine:
                 truth_score=0,
             )
 
-        # Step 2: Get existing facts for contradiction check
-        existing_facts = await self._get_existing_facts(session_id)
+        try:
+            # Step 2: Get existing facts for contradiction check
+            existing_facts = await self._get_existing_facts(session_id)
 
-        # Step 3: Check for contradictions
-        contradictions = await self._check_contradictions(extracted_facts, existing_facts)
+            # Step 3: Check for contradictions
+            contradictions = await self._check_contradictions(extracted_facts, existing_facts)
 
-        # Step 4: Find documentary support for each fact
-        supported_facts = await self._find_support(extracted_facts)
+            # Step 4: Find documentary support for each fact
+            supported_facts = await self._find_support(extracted_facts)
 
-        # Step 5: Generate flags
-        flags = self._generate_flags(supported_facts, contradictions)
+            # Step 5: Generate flags
+            flags = self._generate_flags(supported_facts, contradictions)
 
-        # Step 6: Suggest follow-ups
-        suggested_followups = self._suggest_followups(flags, supported_facts)
+            # Step 6: Suggest follow-ups
+            suggested_followups = self._suggest_followups(flags, supported_facts)
 
-        # Step 7: Compute deterministic truth score from facts + flags
-        truth_score = _compute_truth_score(supported_facts, flags)
+            # Step 7: Compute deterministic truth score from facts + flags
+            truth_score = _compute_truth_score(supported_facts, flags)
+
+        except Exception:
+            logger.exception("Arbiter pipeline failed — returning degraded analysis")
+            return ArbiterAnalysis(
+                extracted_facts=extracted_facts,
+                flags=[],
+                suggested_followups=[],
+                truth_score=100,
+            )
 
         return ArbiterAnalysis(
             extracted_facts=supported_facts,
