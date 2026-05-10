@@ -13,23 +13,12 @@ import type {
 } from '../types'
 
 const API_BASE = '/api/v1'
-const TOKEN_KEY = 'dps_auth_token'
 
-// Auth token management
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
+// Clerk token getter — registered by ClerkTokenSync in main.tsx
+let _clerkGetToken: (() => Promise<string | null>) | null = null
 
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-}
-
-export function isAuthenticated(): boolean {
-  return !!getToken()
+export function initClerkAuth(fn: () => Promise<string | null>): void {
+  _clerkGetToken = fn
 }
 
 async function fetchAPI<T>(
@@ -42,10 +31,11 @@ async function fetchAPI<T>(
     ...(options.headers as Record<string, string>),
   }
 
-  // Add auth header if we have a token
-  const token = getToken()
-  if (requireAuth && token) {
-    headers['Authorization'] = `Bearer ${token}`
+  if (requireAuth && _clerkGetToken) {
+    const token = await _clerkGetToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -54,7 +44,6 @@ async function fetchAPI<T>(
   })
 
   if (response.status === 401) {
-    clearToken()
     window.location.href = '/login'
     throw new Error('Session expired. Please log in again.')
   }
@@ -65,25 +54,6 @@ async function fetchAPI<T>(
   }
 
   return response.json()
-}
-
-// Auth
-export async function login(password: string): Promise<{ access_token: string }> {
-  const result = await fetchAPI<{ access_token: string }>(
-    '/auth/login',
-    {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    },
-    false
-  )
-  setToken(result.access_token)
-  return result
-}
-
-export function logout(): void {
-  clearToken()
-  window.location.href = '/login'
 }
 
 // Sessions
@@ -226,7 +196,7 @@ export async function generateQuestions(
   })
 }
 
-// Clerk Agent
+// Clerk Agent (legal research — different from Clerk auth)
 export async function askClerk(
   query: string,
   sessionId?: string,
@@ -246,12 +216,12 @@ export async function exportQuestions(
   sessionId: string,
   format: 'text' | 'markdown' = 'markdown'
 ): Promise<string> {
-  const token = getToken()
+  const token = _clerkGetToken ? await _clerkGetToken() : null
   const response = await fetch(`${API_BASE}/sessions/${sessionId}/export-questions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
       format,

@@ -83,6 +83,12 @@ class BaseDepositionAgent(ABC):
             max_tokens=1024,
         )
 
+        if not response.content:
+            logger.error("Empty content array from API in agent generate_response")
+            return AgentResponse(
+                message="*long pause* Let's try that again — could you rephrase?",
+                citations=citations,
+            )
         agent_message = response.content[0].text
 
         return AgentResponse(message=agent_message, citations=citations)

@@ -1,85 +1,99 @@
-"""Authentication routes and dependencies."""
+"""Authentication routes and dependencies — Clerk JWT verification."""
 
-from datetime import datetime, timedelta
+import logging
 
-import bcrypt as bcrypt_lib
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from pydantic import BaseModel
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
 settings = get_settings()
 
-
-class LoginRequest(BaseModel):
-    """Login request with password."""
-
-    password: str
+_CLERK_JWKS_URL = "https://api.clerk.com/v1/jwks"
+_jwks_cache: dict[str, dict] = {}
 
 
-class TokenResponse(BaseModel):
-    """JWT token response."""
+async def _fetch_jwks() -> dict[str, dict]:
+    headers = {}
+    if settings.clerk_secret_key:
+        headers["Authorization"] = f"Bearer {settings.clerk_secret_key}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(_CLERK_JWKS_URL, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    return {k["kid"]: k for k in data.get("keys", [])}
 
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int = 86400  # 24 hours
+
+async def _get_jwks() -> dict[str, dict]:
+    global _jwks_cache
+    if not _jwks_cache:
+        _jwks_cache = await _fetch_jwks()
+    return _jwks_cache
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    """Authenticate with shared password and receive JWT."""
-    if not settings.password_hash:
-        raise HTTPException(
-            status_code=500,
-            detail="Authentication not configured. Set PASSWORD_HASH environment variable.",
+async def _verify_clerk_token(token: str) -> dict:
+    """Verify a Clerk-issued JWT and return its claims."""
+    try:
+        header = jwt.get_unverified_header(token)
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail="Malformed token") from exc
+
+    kid = header.get("kid", "")
+    keys = await _get_jwks()
+
+    if kid not in keys:
+        global _jwks_cache
+        _jwks_cache = {}
+        keys = await _get_jwks()
+
+    if kid not in keys:
+        raise HTTPException(status_code=401, detail="Unknown signing key")
+
+    try:
+        return jwt.decode(
+            token,
+            keys[kid],
+            algorithms=["RS256"],
+            options={"verify_aud": False},
         )
-
-    if not bcrypt_lib.checkpw(
-        request.password.encode(), settings.password_hash.encode()
-    ):
-        raise HTTPException(status_code=401, detail="Invalid password")
-
-    expires = datetime.utcnow() + timedelta(hours=24)
-    token = jwt.encode(
-        {"exp": expires, "iat": datetime.utcnow()},
-        settings.jwt_secret,
-        algorithm="HS256",
-    )
-    return TokenResponse(access_token=token)
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail=f"Token verification failed: {exc}") from exc
 
 
 @router.get("/verify")
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
-    """Verify a JWT token is valid."""
+    """Verify a Clerk JWT and return the user ID."""
     if not credentials:
         raise HTTPException(status_code=401, detail="No token provided")
-
-    try:
-        jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=["HS256"])
-        return {"valid": True}
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    claims = await _verify_clerk_token(credentials.credentials)
+    return {"valid": True, "user_id": claims.get("sub")}
 
 
 async def require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> bool:
-    """Dependency to require valid JWT on protected routes."""
-    # Skip auth in development if disabled
+) -> str:
+    """Dependency that enforces Clerk auth. Returns the Clerk user_id."""
     if settings.auth_disabled:
-        return True
+        return "dev-user"
+
+    if not settings.clerk_secret_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Auth not configured. Set CLERK_SECRET_KEY environment variable.",
+        )
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    try:
-        jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=["HS256"])
-        return True
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    claims = await _verify_clerk_token(credentials.credentials)
+    user_id = claims.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token missing user identity")
+    return user_id

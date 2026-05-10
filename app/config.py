@@ -61,9 +61,8 @@ class Settings(BaseSettings):
     # Optional: OCR
     tesseract_path: str | None = None
 
-    # Authentication
-    jwt_secret: str = "dev-secret-change-in-production"
-    password_hash: str = ""  # Bcrypt hash of the app password
+    # Authentication — Clerk
+    clerk_secret_key: str = ""  # sk_live_... or sk_test_...  (required in prod)
     auth_disabled: bool = False  # Set True for local dev without auth
 
     @property
